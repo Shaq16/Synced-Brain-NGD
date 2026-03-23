@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg
+*.eggs
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Backend
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/*/__pycache__/
+backend/app/data/
+
+# Milvus / Vector Store
+*.index
+*.pkl
+backend/app/data/
+
+# # Data (separate from code)
+# knowledge/
+# *.pdf
+# *.docx
+# *.xlsx
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/settings.json
+.vscode/extensions.json
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+.tox/
+.hypothesis/
+
+# OS
+Thumbs.db
+.DS_Store

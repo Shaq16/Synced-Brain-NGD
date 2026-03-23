@@ -1,0 +1,24 @@
+# Core API
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0.0
+python-multipart
+
+# Embeddings
+cohere>=5.0.0
+
+# LLM
+# google-generativeai>=0.7.0  this has been depreceated.
+google-genai
+# grok                        this is for immediate prototyping
+
+# Vector DB
+pymilvus>=2.4.0
+
+# Ingestion
+pdfplumber>=0.11.0
+langchain>=0.2.0
+langchain-text-splitters>=0.2.0
+
+# Utilities
+python-dotenv>=1.0.0

@@ -1,0 +1,246 @@
+import { useEffect, useRef, useState } from "react";
+import { checkHealth, CitationItem, queryBrain, QueryFilters, QueryResponse } from "./api";
+import "./App.css";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  citations?: CitationItem[];
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }: { source: string }) {
+  const parts = source.split("/");
+  const filename = parts[parts.length - 1];
+  return (
+    <span className="source-badge" title={source}>
+      📄 {filename}
+    </span>
+  );
+}
+
+function CitationCard({ citation, index }: { citation: CitationItem; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = citation.text.slice(0, 160);
+  return (
+    <div className="citation-card">
+      <div className="citation-header">
+        <span className="citation-index">[{index + 1}]</span>
+        <SourceBadge source={citation.source} />
+        {citation.page && citation.page > 0 && (
+          <span className="citation-page">p.{citation.page}</span>
+        )}
+      </div>
+      <p className="citation-text">
+        {expanded ? citation.text : preview}
+        {citation.text.length > 160 && (
+          <button className="expand-btn" onClick={() => setExpanded(!expanded)}>
+            {expanded ? " show less" : "… show more"}
+          </button>
+        )}
+      </p>
+    </div>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [healthy, setHealthy] = useState<boolean | null>(null);
+  const [topK, setTopK] = useState(5);
+  const [debugMode, setDebugMode] = useState(false);
+  const [filterDocType, setFilterDocType] = useState<"" | "md" | "pdf">("");
+  const [filterPrefix, setFilterPrefix] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    checkHealth().then(setHealthy);
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  async function handleSend() {
+    const q = input.trim();
+    if (!q || loading) return;
+
+    const userMsg: Message = { role: "user", content: q };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    const filters: QueryFilters = {};
+    if (filterPrefix) filters.source_prefix = filterPrefix;
+    if (filterDocType) filters.doc_type = filterDocType;
+
+    try {
+      const res: QueryResponse = await queryBrain(
+        q,
+        topK,
+        Object.keys(filters).length ? filters : undefined,
+        debugMode
+      );
+      const assistantMsg: Message = {
+        role: "assistant",
+        content: res.answer,
+        citations: res.citations,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `⚠️ Error: ${msg}` },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <span className="logo-icon">🧠</span>
+          <span className="logo-text">Synced Brain</span>
+        </div>
+
+        <div className="sidebar-status">
+          <span className={`status-dot ${healthy === null ? "checking" : healthy ? "ok" : "err"}`} />
+          {healthy === null ? "Connecting…" : healthy ? "Backend online" : "Backend offline"}
+        </div>
+
+        <section className="sidebar-section">
+          <label className="sidebar-label">Results (top-k)</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={topK}
+            onChange={(e) => setTopK(Number(e.target.value))}
+            className="sidebar-input"
+          />
+        </section>
+
+        <section className="sidebar-section">
+          <label className="sidebar-label">Filter: doc type</label>
+          <select
+            value={filterDocType}
+            onChange={(e) => setFilterDocType(e.target.value as "" | "md" | "pdf")}
+            className="sidebar-input"
+          >
+            <option value="">All</option>
+            <option value="md">Markdown</option>
+            <option value="pdf">PDF</option>
+          </select>
+        </section>
+
+        <section className="sidebar-section">
+          <label className="sidebar-label">Filter: path prefix</label>
+          <input
+            type="text"
+            placeholder="knowledge/ops/"
+            value={filterPrefix}
+            onChange={(e) => setFilterPrefix(e.target.value)}
+            className="sidebar-input"
+          />
+        </section>
+
+        <section className="sidebar-section">
+          <label className="sidebar-toggle">
+            <input
+              type="checkbox"
+              checked={debugMode}
+              onChange={(e) => setDebugMode(e.target.checked)}
+            />
+            <span>Debug scores</span>
+          </label>
+        </section>
+
+        <div className="sidebar-footer">
+          <p>Drop <code>.md</code> or <code>.pdf</code> files in <code>knowledge/</code> and push to sync.</p>
+        </div>
+      </aside>
+
+      {/* ── Chat area ── */}
+      <main className="chat-area">
+        <div className="messages">
+          {messages.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-icon">🧠</span>
+              <h2>Your Synced Brain</h2>
+              <p>Ask anything about your knowledge base. Files are synced automatically via git push.</p>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
+            <div key={i} className={`message ${msg.role}`}>
+              <div className="message-bubble">
+                <span className="message-role">{msg.role === "user" ? "You" : "Brain"}</span>
+                <p className="message-content">{msg.content}</p>
+              </div>
+
+              {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+                <div className="citations-block">
+                  <p className="citations-label">
+                    Sources ({msg.citations.length})
+                  </p>
+                  <div className="citations-list">
+                    {msg.citations.map((c, ci) => (
+                      <CitationCard key={ci} citation={c} index={ci} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="message assistant">
+              <div className="message-bubble">
+                <span className="message-role">Brain</span>
+                <p className="message-content thinking">
+                  <span />
+                  <span />
+                  <span />
+                </p>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* ── Input bar ── */}
+        <div className="input-bar">
+          <textarea
+            className="input-field"
+            rows={1}
+            placeholder="Ask your brain anything… (Enter to send, Shift+Enter for newline)"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+          />
+          <button className="send-btn" onClick={handleSend} disabled={loading || !input.trim()}>
+            {loading ? "…" : "Ask"}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}

@@ -1,0 +1,66 @@
+name: 🧠 Sync Brain
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "knowledge/**"    # Only trigger when knowledge files change
+  workflow_dispatch:       # Allow manual runs from the Actions tab
+
+jobs:
+  sync:
+    name: Reconcile knowledge/ → Milvus
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      MILVUS_HOST:      ${{ secrets.MILVUS_HOST }}
+      MILVUS_PORT:      ${{ secrets.MILVUS_PORT || '19530' }}
+      MILVUS_COLLECTION: ${{ secrets.MILVUS_COLLECTION || 'synced_brain_chunks' }}
+      COHERE_API_KEY:   ${{ secrets.COHERE_API_KEY }}
+      GOOGLE_API_KEY:   ${{ secrets.GOOGLE_API_KEY }}
+      KNOWLEDGE_DIR:    knowledge
+
+    steps:
+      # ── 1. Checkout with full history (needed for git-diff mode) ────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2      # Need parent commit for diff
+
+      # ── 2. Set up Python ────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # ── 3. Install backend dependencies ─────────────────────────────────────
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      # ── 4. Run sync (git-diff fast-path) ────────────────────────────────────
+      #
+      #   Uses git-diff mode so only changed files are re-embedded (cheaper).
+      #   Falls back to full reconcile on workflow_dispatch.
+      #
+      - name: Run sync (git-diff mode)
+        if: github.event_name == 'push'
+        run: |
+          python -m backend.app.sync.sync --git-diff HEAD~1 HEAD
+
+      - name: Run full reconcile (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python -m backend.app.sync.sync
+
+      # ── 5. (Optional) Smoke test against deployed backend ───────────────────
+      #   Uncomment and set BACKEND_URL secret if you have a deployed instance.
+      #
+      # - name: Smoke test
+      #   env:
+      #     BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      #   run: |
+      #     pip install requests pytest
+      #     python backend/app/tests/test_sync_and_query.py
