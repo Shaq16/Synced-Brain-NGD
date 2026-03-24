@@ -26,6 +26,25 @@ export interface UploadResponse {
   chunks: number;
 }
 
+export interface UploadFileItem {
+  name: string;
+  source: string;
+  size_bytes: number;
+  modified_at: string;
+}
+
+export interface UploadListResponse {
+  status: string;
+  files: UploadFileItem[];
+}
+
+export interface DeleteUploadResponse {
+  status: string;
+  source: string;
+  action: "DELETED";
+  chunks: number;
+}
+
 export async function queryBrain(
   question: string,
   topK = 5,
@@ -65,6 +84,31 @@ export async function uploadKnowledgeFile(file: File): Promise<UploadResponse> {
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Upload failed (${res.status}): ${errText}`);
+  }
+
+  return res.json();
+}
+
+export async function listUploadedKnowledgeFiles(): Promise<UploadListResponse> {
+  const res = await fetch(`${BACKEND_URL}/uploads`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`List uploads failed (${res.status}): ${errText}`);
+  }
+  return res.json();
+}
+
+export async function deleteUploadedKnowledgeFile(
+  filename: string
+): Promise<DeleteUploadResponse> {
+  const encoded = encodeURIComponent(filename);
+  const res = await fetch(`${BACKEND_URL}/uploads/${encoded}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Delete upload failed (${res.status}): ${errText}`);
   }
 
   return res.json();

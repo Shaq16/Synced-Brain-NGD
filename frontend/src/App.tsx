@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   checkHealth,
   CitationItem,
+  deleteUploadedKnowledgeFile,
+  listUploadedKnowledgeFiles,
+  UploadFileItem,
   queryBrain,
   QueryFilters,
   QueryResponse,
@@ -66,11 +69,28 @@ export default function App() {
   const [filterPrefix, setFilterPrefix] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<UploadFileItem[]>([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
+  const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  async function refreshUploads() {
+    setUploadsLoading(true);
+    try {
+      const res = await listUploadedKnowledgeFiles();
+      setUploadedFiles(res.files);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUploadStatus(`List uploads error: ${msg}`);
+    } finally {
+      setUploadsLoading(false);
+    }
+  }
+
   useEffect(() => {
     checkHealth().then(setHealthy);
+    refreshUploads();
   }, []);
 
   useEffect(() => {
@@ -132,6 +152,7 @@ export default function App() {
       const res = await uploadKnowledgeFile(file);
       setUploadStatus(`Uploaded: ${res.action}, chunks: ${res.chunks}`);
       setFilterPrefix("knowledge/uploads/");
+      await refreshUploads();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setUploadStatus(`Upload error: ${msg}`);
@@ -140,6 +161,26 @@ export default function App() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  }
+
+  async function handleDeleteUpload(file: UploadFileItem) {
+    if (deletingFilename || uploading) return;
+    const confirmed = window.confirm(`Delete ${file.name}? This will remove synced chunks too.`);
+    if (!confirmed) return;
+
+    setDeletingFilename(file.name);
+    setUploadStatus(`Deleting ${file.name} and syncing...`);
+
+    try {
+      const res = await deleteUploadedKnowledgeFile(file.name);
+      setUploadStatus(`Deleted: ${res.action}`);
+      await refreshUploads();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUploadStatus(`Delete error: ${msg}`);
+    } finally {
+      setDeletingFilename(null);
     }
   }
 
@@ -220,6 +261,44 @@ export default function App() {
           >
             {uploading ? "Uploading..." : "Upload File"}
           </button>
+
+          <div className="upload-files-block">
+            <div className="upload-files-header">
+              <span>Uploaded Files</span>
+              <button
+                className="upload-files-refresh"
+                onClick={refreshUploads}
+                disabled={uploadsLoading || uploading || !!deletingFilename}
+              >
+                {uploadsLoading ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            {uploadsLoading ? (
+              <p className="upload-files-empty">Loading files...</p>
+            ) : uploadedFiles.length === 0 ? (
+              <p className="upload-files-empty">No uploaded files yet.</p>
+            ) : (
+              <ul className="upload-files-list">
+                {uploadedFiles.map((f) => (
+                  <li key={f.name} className="upload-file-item">
+                    <div className="upload-file-meta">
+                      <span className="upload-file-name" title={f.name}>{f.name}</span>
+                      <span className="upload-file-size">{Math.max(1, Math.round(f.size_bytes / 1024))} KB</span>
+                    </div>
+                    <button
+                      className="upload-file-delete-btn"
+                      onClick={() => handleDeleteUpload(f)}
+                      disabled={uploading || !!deletingFilename}
+                    >
+                      {deletingFilename === f.name ? "Deleting..." : "Delete"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {uploadStatus && <p className="upload-status">{uploadStatus}</p>}
         </section>
 
