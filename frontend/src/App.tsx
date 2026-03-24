@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { checkHealth, CitationItem, queryBrain, QueryFilters, QueryResponse } from "./api";
+import {
+  checkHealth,
+  CitationItem,
+  queryBrain,
+  QueryFilters,
+  QueryResponse,
+  uploadKnowledgeFile,
+} from "./api";
 import "./App.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,6 +64,9 @@ export default function App() {
   const [debugMode, setDebugMode] = useState(false);
   const [filterDocType, setFilterDocType] = useState<"" | "md" | "pdf">("");
   const [filterPrefix, setFilterPrefix] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -108,6 +118,28 @@ export default function App() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  }
+
+  async function handleUploadChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || uploading) return;
+
+    setUploading(true);
+    setUploadStatus("Uploading and syncing...");
+
+    try {
+      const res = await uploadKnowledgeFile(file);
+      setUploadStatus(`Uploaded: ${res.action}, chunks: ${res.chunks}`);
+      setFilterPrefix("knowledge/uploads/");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setUploadStatus(`Upload error: ${msg}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   }
 
@@ -172,8 +204,27 @@ export default function App() {
           </label>
         </section>
 
+        <section className="sidebar-section">
+          <label className="sidebar-label">Upload to knowledge</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.txt,.pdf"
+            onChange={handleUploadChange}
+            className="hidden-file-input"
+          />
+          <button
+            className="sidebar-upload-btn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? "Uploading..." : "Upload File"}
+          </button>
+          {uploadStatus && <p className="upload-status">{uploadStatus}</p>}
+        </section>
+
         <div className="sidebar-footer">
-          <p>Drop <code>.md</code> or <code>.pdf</code> files in <code>knowledge/</code> and push to sync.</p>
+          <p>Uploads are saved as markdown in <code>knowledge/uploads/</code> and synced immediately.</p>
         </div>
       </aside>
 

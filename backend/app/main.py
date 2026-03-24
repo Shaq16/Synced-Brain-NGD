@@ -6,15 +6,22 @@ Endpoints:
   POST /query   — RAG query against Milvus + Gemini answer generation
 """
 import os
+import re
+import tempfile
+from datetime import datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 import cohere
 from google import genai
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
+from backend.app.ingestion.parsers import parse_pdf
+from backend.app.sync.sync import sync_single_file
 from backend.app.vectorstore.milvus_store import get_or_create_collection, search
 
 # for immediate prototyping
@@ -23,6 +30,7 @@ from groq import Groq
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+load_dotenv()
 COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
@@ -31,6 +39,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY","")
 
 ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "*").split(",")
 EMBED_MODEL = "embed-english-v3.0"
+KNOWLEDGE_DIR = os.getenv("KNOWLEDGE_DIR", "knowledge")
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 
@@ -89,18 +100,59 @@ class QueryResponse(BaseModel):
     retrieval: Optional[dict] = None
 
 
+class UploadResponse(BaseModel):
+    status: str
+    source: str
+    action: str
+    chunks: int
+
+
+def _slugify_filename_stem(name: str) -> str:
+    stem = Path(name).stem.strip().lower()
+    stem = re.sub(r"[^a-z0-9._-]+", "-", stem)
+    stem = re.sub(r"-+", "-", stem).strip("-.")
+    return stem or "document"
+
+
+def _build_markdown_from_upload(filename: str, content: bytes) -> str:
+    ext = Path(filename).suffix.lower()
+
+    if ext == ".pdf":
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as temp_pdf:
+            temp_pdf.write(content)
+            temp_pdf.flush()
+            pages = parse_pdf(temp_pdf.name)
+        if not pages:
+            raise ValueError("Uploaded PDF had no extractable text.")
+
+        md_parts: list[str] = []
+        for i, page in enumerate(pages, start=1):
+            md_parts.append(f"## Page {page.get('page') or i}\n\n{page['text']}")
+        return "\n\n".join(md_parts).strip()
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Only UTF-8 text/markdown files and PDFs are supported.")
+
+    if not text.strip():
+        raise ValueError("Uploaded file is empty.")
+    return text.strip()
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status":f"ok"}
 
 
 @app.post("/query", response_model=QueryResponse)
 def query_brain(req: QueryRequest):
     # 1) Embed the question
     co = cohere.Client(COHERE_API_KEY)
+
     try:
         resp = co.embed(
             texts=[req.question],
@@ -174,7 +226,6 @@ def query_brain(req: QueryRequest):
     #         model="gemini-2.0-flash",
     #         contents=prompt,
     #     )
-
     #     answer = response.text.strip()
     # except Exception as exc:
     #     answer = f"LLM error ({exc}). Retrieved {len(hits)} chunks — see citations."
@@ -220,3 +271,40 @@ def query_brain(req: QueryRequest):
     )
 
     return QueryResponse(answer=answer, citations=citations, retrieval=retrieval_info)
+
+
+@app.post("/upload", response_model=UploadResponse)
+async def upload_knowledge_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename in upload.")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in {".md", ".txt", ".pdf"}:
+        raise HTTPException(status_code=400, detail="Supported file types: .md, .txt, .pdf")
+
+    try:
+        payload = await file.read()
+        markdown_text = _build_markdown_from_upload(file.filename, payload)
+
+        uploads_dir = (_REPO_ROOT / KNOWLEDGE_DIR / "uploads").resolve()
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        safe_stem = _slugify_filename_stem(file.filename)
+        target_path = uploads_dir / f"{safe_stem}-{ts}.md"
+
+        target_path.write_text(markdown_text + "\n", encoding="utf-8")
+
+        sync_result = sync_single_file(str(target_path))
+        return UploadResponse(
+            status="ok",
+            source=sync_result["source"],
+            action=sync_result["action"],
+            chunks=sync_result["chunks"],
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")

@@ -20,9 +20,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Make sure the repo root is importable regardless of CWD
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 
 import cohere  # noqa: E402
@@ -37,6 +38,8 @@ from backend.app.vectorstore.milvus_store import (  # noqa: E402
     get_or_create_collection,
     upsert_chunks,
 )
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Config
@@ -100,20 +103,26 @@ def _git_changed_files(base: str, head: str) -> dict[str, str]:
 # Core sync logic
 # ---------------------------------------------------------------------------
 
-def _process_file(col, file_path: str, action: str, content_hash: str) -> None:
+def _process_file(
+    col,
+    file_path: str,
+    action: str,
+    content_hash: str,
+    source_override: str | None = None,
+) -> int:
     """Parse, embed, and upsert one file. Deletes old chunks if MODIFIED."""
-    source = _norm(file_path)
+    source = source_override or _norm(file_path)
 
     try:
         pages = parse_file(file_path)
         chunks = chunk_pages(pages)
     except Exception as exc:
         print(f"  [ERROR] Could not parse {file_path}: {exc}")
-        return
+        return 0
 
     if not chunks:
         print(f"  [WARN] No text extracted from {file_path} — skipping.")
-        return
+        return 0
 
     if action == "MODIFIED":
         delete_by_source(col, source)
@@ -127,7 +136,7 @@ def _process_file(col, file_path: str, action: str, content_hash: str) -> None:
         embeddings = _get_embeddings(texts)
     except Exception as exc:
         print(f"  [ERROR] Embedding failed for {file_path}: {exc}")
-        return
+        return 0
 
     records = [
         {
@@ -145,6 +154,44 @@ def _process_file(col, file_path: str, action: str, content_hash: str) -> None:
     ]
     upsert_chunks(col, records)
     print(f"  → upserted {len(records)} chunks")
+    return len(records)
+
+
+def sync_single_file(file_path: str) -> dict:
+    """
+    Sync a single markdown/pdf file into Milvus.
+
+    Returns:
+        dict with {action, source, chunks}
+    """
+    path = Path(file_path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    if path.suffix.lower() not in {".md", ".pdf"}:
+        raise ValueError(f"Unsupported file type: {path.suffix}")
+
+    col = get_or_create_collection()
+    try:
+        source = _norm(str(path.relative_to(_REPO_ROOT)))
+    except ValueError:
+        source = _norm(str(path))
+
+    content_hash = file_content_hash(str(path))
+    existing_hash = get_existing_hash(col, source)
+
+    if existing_hash == content_hash:
+        return {"action": "UNCHANGED", "source": source, "chunks": 0}
+
+    action = "ADDED" if existing_hash is None else "MODIFIED"
+    chunk_count = _process_file(
+        col,
+        str(path),
+        action,
+        content_hash,
+        source_override=source,
+    )
+    return {"action": action, "source": source, "chunks": chunk_count}
 
 
 def full_reconcile() -> None:
