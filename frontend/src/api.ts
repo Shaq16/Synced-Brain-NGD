@@ -19,6 +19,13 @@ export interface QueryFilters {
   doc_type?: "md" | "pdf";
 }
 
+export interface UploadResponse {
+  status: string;
+  source: string;
+  action: "ADDED" | "MODIFIED" | "UNCHANGED";
+  chunks: number;
+}
+
 export async function queryBrain(
   question: string,
   topK = 5,
@@ -44,4 +51,21 @@ export async function checkHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function uploadKnowledgeFile(file: File): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${BACKEND_URL}/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Upload failed (${res.status}): ${errText}`);
+  }
+
+  return res.json();
 }

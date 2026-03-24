@@ -99,6 +99,34 @@ html, body, #root { height: 100%; font-family: var(--font); background: var(--bg
 }
 .sidebar-toggle input { accent-color: var(--accent); }
 
+.hidden-file-input {
+  display: none;
+}
+
+.sidebar-upload-btn {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar-upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-status {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding: 14px 18px;
