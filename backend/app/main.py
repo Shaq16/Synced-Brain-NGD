@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from backend.app.ingestion.parsers import parse_pdf
-from backend.app.sync.sync import sync_single_file
+from backend.app.sync.sync import sync_deleted_source, sync_single_file
 from backend.app.vectorstore.milvus_store import get_or_create_collection, search
 
 # for immediate prototyping
@@ -101,6 +101,25 @@ class QueryResponse(BaseModel):
 
 
 class UploadResponse(BaseModel):
+    status: str
+    source: str
+    action: str
+    chunks: int
+
+
+class UploadFileItem(BaseModel):
+    name: str
+    source: str
+    size_bytes: int
+    modified_at: str
+
+
+class UploadListResponse(BaseModel):
+    status: str
+    files: list[UploadFileItem]
+
+
+class DeleteUploadResponse(BaseModel):
     status: str
     source: str
     action: str
@@ -308,3 +327,65 @@ async def upload_knowledge_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
+
+
+@app.get("/uploads", response_model=UploadListResponse)
+def list_uploads():
+    try:
+        uploads_dir = (_REPO_ROOT / KNOWLEDGE_DIR / "uploads").resolve()
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        items: list[UploadFileItem] = []
+        for p in sorted(uploads_dir.glob("*.md"), reverse=True):
+            stat = p.stat()
+            source = Path(KNOWLEDGE_DIR) / "uploads" / p.name
+            items.append(
+                UploadFileItem(
+                    name=p.name,
+                    source=source.as_posix(),
+                    size_bytes=stat.st_size,
+                    modified_at=datetime.utcfromtimestamp(stat.st_mtime).isoformat() + "Z",
+                )
+            )
+
+        return UploadListResponse(status="ok", files=items)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Listing uploads failed: {exc}")
+
+
+@app.delete("/uploads/{filename}", response_model=DeleteUploadResponse)
+def delete_upload(filename: str):
+    if not filename or filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    safe_name = Path(filename).name
+    if safe_name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if Path(safe_name).suffix.lower() != ".md":
+        raise HTTPException(status_code=400, detail="Only markdown uploads can be deleted.")
+
+    uploads_dir = (_REPO_ROOT / KNOWLEDGE_DIR / "uploads").resolve()
+    target = (uploads_dir / safe_name).resolve()
+
+    try:
+        target.relative_to(uploads_dir)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid path.")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Upload file not found.")
+
+    try:
+        target.unlink()
+        source = (Path(KNOWLEDGE_DIR) / "uploads" / safe_name).as_posix()
+        sync_result = sync_deleted_source(source)
+        return DeleteUploadResponse(
+            status="ok",
+            source=sync_result["source"],
+            action=sync_result["action"],
+            chunks=sync_result["chunks"],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {exc}")

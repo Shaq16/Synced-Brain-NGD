@@ -194,6 +194,22 @@ def sync_single_file(file_path: str) -> dict:
     return {"action": action, "source": source, "chunks": chunk_count}
 
 
+def sync_deleted_source(source: str) -> dict:
+    """
+    Remove one source path from Milvus when the backing file is deleted.
+
+    Args:
+        source: Repository-relative source path stored in Milvus.
+
+    Returns:
+        dict with {action, source, chunks}
+    """
+    norm_source = _norm(source)
+    col = get_or_create_collection()
+    delete_by_source(col, norm_source)
+    return {"action": "DELETED", "source": norm_source, "chunks": 0}
+
+
 def full_reconcile() -> None:
     """Compare every file in knowledge/ against Milvus state."""
     print(f"[SYNC] Full reconcile from '{KNOWLEDGE_DIR}' …")

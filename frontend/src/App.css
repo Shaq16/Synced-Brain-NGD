@@ -120,6 +120,104 @@ html, body, #root { height: 100%; font-family: var(--font); background: var(--bg
   cursor: not-allowed;
 }
 
+.upload-files-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.upload-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.upload-files-refresh {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.upload-files-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-files-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 170px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.upload-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+
+.upload-file-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.upload-file-name {
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-file-size {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.upload-file-delete-btn {
+  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border));
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  color: #fecaca;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.upload-file-delete-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 28%, transparent);
+}
+
+.upload-file-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.upload-files-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .upload-status {
   margin-top: 8px;
   font-size: 0.75rem;
