@@ -1,36 +1,20 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.10'
-            args '-u root'
-        }
-    }
+    agent any
 
     stages {
 
-        stage('Verify Python') {
-            steps {
-                sh 'python --version'
-                sh 'pip --version'
-            }
-        }
-
-        stage('Install Dependencies') {
+        stage('Build Docker Image') {
             steps {
                 sh '''
-                python -m venv venv
-                . venv/bin/activate
-                pip install --upgrade pip
-                pip install -r backend/requirements.txt
+                docker build -t synced-brain .
                 '''
             }
         }
 
-        stage('Run Backend') {
+        stage('Run Container') {
             steps {
                 sh '''
-                . venv/bin/activate
-                echo "Backend started successfully"
+                docker run --rm synced-brain
                 '''
             }
         }
