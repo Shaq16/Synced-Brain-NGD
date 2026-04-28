@@ -5,14 +5,21 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                bat 'python -m venv venv'
-                bat 'venv\\Scripts\\activate && pip install -r backend/requirements.txt'
+                sh '''
+                python3 -m venv venv || python -m venv venv
+                . venv/bin/activate
+                pip install --upgrade pip
+                pip install -r backend/requirements.txt
+                '''
             }
         }
 
         stage('Run Backend') {
             steps {
-                bat 'venv\\Scripts\\activate && python -m backend.app.main'
+                sh '''
+                . venv/bin/activate
+                python -m backend.app.main || python3 -m backend.app.main
+                '''
             }
         }
     }
