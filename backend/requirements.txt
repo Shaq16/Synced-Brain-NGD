@@ -12,6 +12,8 @@ cohere>=5.0.0
 google-genai
 # grok                        this is for immediate prototyping
 
+groq 
+
 # Vector DB
 pymilvus>=2.4.0
 
