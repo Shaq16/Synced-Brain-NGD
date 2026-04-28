@@ -3,10 +3,19 @@ pipeline {
 
     stages {
 
+        stage('Install Python') {
+            steps {
+                sh '''
+                apt-get update
+                apt-get install -y python3 python3-pip python3-venv
+                '''
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv venv || python -m venv venv
+                python3 -m venv venv
                 . venv/bin/activate
                 pip install --upgrade pip
                 pip install -r backend/requirements.txt
@@ -18,7 +27,7 @@ pipeline {
             steps {
                 sh '''
                 . venv/bin/activate
-                python -m backend.app.main || python3 -m backend.app.main
+                python -m backend.app.main
                 '''
             }
         }
