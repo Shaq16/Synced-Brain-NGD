@@ -12,10 +12,13 @@ pipeline {
                 sh 'docker build -t synced-brain .'
             }
         }
-
         stage('Test / Run Backend') {
             steps {
-                sh 'docker run --rm synced-brain'
+                sh '''
+                docker run --rm \
+                -e SKIP_MILVUS=true \
+                synced-brain
+                '''
             }
         }
 

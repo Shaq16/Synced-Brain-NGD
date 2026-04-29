@@ -20,6 +20,13 @@ from backend.app.vectorstore.milvus_store import get_or_create_collection, searc
 # ---------------------------------------------------------------------------
 # ENV LOADING
 # ---------------------------------------------------------------------------
+
+SKIP_MILVUS = os.getenv("SKIP_MILVUS")
+
+if not SKIP_MILVUS:
+    get_col()
+
+
 env_path = Path(__file__).resolve().parents[1] / ".env"
 print("Loading .env from:", env_path)
 load_dotenv(dotenv_path=env_path)
