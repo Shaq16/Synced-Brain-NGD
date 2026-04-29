@@ -18,6 +18,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   citations?: CitationItem[];
+  retrieval?: any;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -121,6 +122,7 @@ export default function App() {
         role: "assistant",
         content: res.answer,
         citations: res.citations,
+        retrieval: res.retrieval,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: unknown) {
@@ -318,27 +320,53 @@ export default function App() {
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <div key={i} className={`message ${msg.role}`}>
-              <div className="message-bubble">
-                <span className="message-role">{msg.role === "user" ? "You" : "Brain"}</span>
-                <p className="message-content">{msg.content}</p>
-              </div>
+{messages.map((msg, i) => (
+  <div key={i} className={`message ${msg.role}`}>
+    <div className="message-bubble">
+      <span className="message-role">{msg.role === "user" ? "You" : "Brain"}</span>
+      <p className="message-content">{msg.content}</p>
+    </div>
 
-              {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
-                <div className="citations-block">
-                  <p className="citations-label">
-                    Sources ({msg.citations.length})
-                  </p>
-                  <div className="citations-list">
-                    {msg.citations.map((c, ci) => (
-                      <CitationCard key={ci} citation={c} index={ci} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+    {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+      <div className="citations-block">
+        <p className="citations-label">
+          Sources ({msg.citations.length})
+        </p>
+        <div className="citations-list">
+          {msg.citations.map((c, ci) => (
+            <CitationCard key={ci} citation={c} index={ci} />
           ))}
+        </div>
+      </div>
+    )}
+
+    {/* 🔥 ADD THIS BLOCK BELOW */}
+    {msg.role === "assistant" && msg.retrieval?.raw_chunks && (
+      <div style={{ marginTop: "6px" }}>
+        <details>
+          <summary style={{ cursor: "pointer", fontSize: "12px", opacity: 0.7 }}>
+            🔍 Retrieved Chunks (Vector DB)
+          </summary>
+
+          <pre
+            style={{
+              fontSize: "10px",
+              opacity: 0.6,
+              background: "#111",
+              padding: "6px",
+              borderRadius: "6px",
+              marginTop: "5px",
+              overflowX: "auto"
+            }}
+          >
+            {JSON.stringify(msg.retrieval.raw_chunks, null, 2)}
+          </pre>
+        </details>
+      </div>
+    )}
+    {/* 🔥 END */}
+  </div>
+))}
 
           {loading && (
             <div className="message assistant">
