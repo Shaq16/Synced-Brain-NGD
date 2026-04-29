@@ -23,8 +23,8 @@ from backend.app.vectorstore.milvus_store import get_or_create_collection, searc
 
 SKIP_MILVUS = os.getenv("SKIP_MILVUS")
 
-if not SKIP_MILVUS:
-    get_col()
+# if not SKIP_MILVUS:
+#     get_col()
 
 
 env_path = Path(__file__).resolve().parents[1] / ".env"
@@ -54,10 +54,13 @@ def get_col():
 # APP SETUP
 # ---------------------------------------------------------------------------
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    get_col()
+async def lifespan(app):
+    if os.getenv("SKIP_MILVUS") == "true":
+        print("Skipping Milvus connection (CI mode)")
+    else:
+        print("Connecting to Milvus...")
+        get_col()
     yield
-
 
 app = FastAPI(title="Synced Brain API", version="FINAL", lifespan=lifespan)
 
