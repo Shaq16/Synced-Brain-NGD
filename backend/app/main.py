@@ -122,6 +122,9 @@ def _build_markdown_from_upload(filename: str, content: bytes) -> str:
 def health():
     return {"status": "ok"}
 
+@app.get("/")
+def root():
+    return {"message": "CI/CD working 🚀"}
 
 # -------------------- QUERY --------------------
 @app.post("/query", response_model=QueryResponse)
