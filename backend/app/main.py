@@ -134,7 +134,7 @@ def health():
 
 @app.get("/")
 def root():
-    return {"message": "CI/CD working 🚀"}
+    return {"message": "CI/CD pipeline is working"}
 
 # -------------------- QUERY --------------------
 @app.post("/query", response_model=QueryResponse)
