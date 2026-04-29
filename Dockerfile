@@ -2,12 +2,13 @@ FROM python:3.10
 
 WORKDIR /app
 
-# Copy only requirements first (for caching)
+# Copy only requirements (for caching)
 COPY backend/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy rest of code
-COPY . .
+# Copy only backend (important optimization)
+COPY backend/ backend/
 
-CMD ["python", "-m", "backend.app.main"]
+# Run FastAPI properly
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
